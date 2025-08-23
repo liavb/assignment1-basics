@@ -11,7 +11,7 @@ PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s
 
 
 def init_vocab():
-    vocab = {257: "<|endoftext|>".encode('utf-8')}
+    vocab = {256: "<|endoftext|>".encode('utf-8')}
     byte_map = {i: bytes([i]) for i in range(256)}
     vocab.update(byte_map)
     return vocab
@@ -52,37 +52,27 @@ def merge(corpus_word_freq: dict[int, int], word_list: list[tuple[bytes]], n_ite
     Iteratively merges the most frequent consecutive byte pairs in the word list.
     Returns a list of merged byte pairs.
     """
-    merged_pairs_dict = merge_consecutive_bytes_pairs(corpus_word_freq, word_list)
+    pairs_dict = merge_consecutive_bytes_pairs(corpus_word_freq, word_list)
 
     frequent_merges = []
     for i in range(n_iterations):
         # Find the most frequent pair
-        most_freq_pair, stats = max(merged_pairs_dict.items(), key=sort_by_count_and_lex)
-        # print(most_freq_pair, stats)
+        most_freq_pair, stats = max(pairs_dict.items(), key=sort_by_count_and_lex)
         frequent_merges.append(most_freq_pair)
-        merged_pairs_dict.pop(most_freq_pair)
-        # print(most_freq_pair, stats['c'])
+        pairs_dict.pop(most_freq_pair)
+
 
         most_freq_pair_word_indicies = stats['w'] # stats['w'] contains indices of words where most_freq_pair appears
-        # Update the word list at affected words, to new word structure (merged on the most frequent pair)
-        for idx in most_freq_pair_word_indicies:
+        for idx in most_freq_pair_word_indicies: # iterate over all the words containing the most frequent pair
             word_tuple = word_list[idx]
             word_freq = corpus_word_freq[idx]
-            merged_word = merge_word(word_tuple=word_tuple,
-                                     merged_pair=most_freq_pair,
-                                     merged_pairs_dict=merged_pairs_dict,
-                                     word_freq=word_freq,
-                                     word_idx=idx)
+            # merge the most frequent pair into a single bytes object in the word tuple, update pairs_dict accordingly
+            merged_word = merge_and_update_pairs_dict(word_tuple=word_tuple,
+                                                      most_freq_pair=most_freq_pair,
+                                                      pairs_dict=pairs_dict,
+                                                      word_freq=word_freq,
+                                                      word_idx=idx)
             word_list[idx] = merged_word
-
-        # # work only with the frequencies of the affected words (runtime optimization)
-        merged_words_freq = {idx: corpus_word_freq[idx] for idx in most_freq_pair_word_indicies}
-
-        # Update pairs_dict for next iteration
-        new_merged_pairs = merge_consecutive_bytes_pairs(frequency_table=merged_words_freq,
-                                                          word_list=word_list,
-                                                          merged_pair=most_freq_pair)
-        merged_pairs_dict.update(new_merged_pairs)
 
     return frequent_merges
 
@@ -95,60 +85,67 @@ def sort_by_count_and_lex(item):
     return count, pair
 
 def merge_consecutive_bytes_pairs(frequency_table: dict[int, int],
-                                  word_list: list[tuple[bytes]],
-                                  merged_pair: tuple[bytes, bytes]=None) -> dict:
+                                  word_list: list[tuple[bytes]]) -> dict:
     """
     Counts consecutive byte pairs in words from the word list, summing their frequencies.
-    If `merged_pair` is provided, only pairs matching this tuple are counted.
-    Returns a dictionary mapping pairs to their count and set of word indices.
     """
 
-    merged_pair_bytes = b''.join(merged_pair) if merged_pair else None
     pairs_dict = defaultdict(lambda: {'c': 0, 'w': set()})
     for idx, freq in frequency_table.items():
         byte_tuple = word_list[idx]
         for i in range(len(byte_tuple) - 1):
             pair = (byte_tuple[i], byte_tuple[i + 1])
-            if merged_pair_bytes is None:
-                pairs_dict[pair]['c'] += freq
-                pairs_dict[pair]['w'].add(idx)
-            else:
-                if merged_pair_bytes in pair:
-                    pairs_dict[pair]['c'] += freq
-                    pairs_dict[pair]['w'].add(idx)
+            pairs_dict[pair]['c'] += freq
+            pairs_dict[pair]['w'].add(idx)
 
     return pairs_dict
 
 
 
-def merge_word(word_tuple: tuple[bytes],
-               merged_pair: tuple[bytes],
-               merged_pairs_dict,
-               word_freq:int,
-               word_idx: int) -> tuple[bytes]:
+def merge_and_update_pairs_dict(word_tuple: tuple[bytes],
+                                most_freq_pair: tuple[bytes],
+                                pairs_dict: dict,
+                                word_freq:int,
+                                word_idx: int) -> tuple[bytes]:
     """
-    Merges consecutive occurrences of `seek_bytes` in `word_tuple` into a single bytes object.
+       Merges the most frequent byte pair in a word tuple into a single element, updates the pairs dictionary,
+    and adjusts counts for affected pairs.
+
+    This function replaces consecutive occurrences of the most frequent byte pair in the word tuple with a
+    single bytes object. It updates the pairs dictionary by:
+    - Adding new pairs formed by the merged element and its neighbors.
+    - Removing or decrementing counts for pairs that are no longer valid due to the merge.
     """
 
-    merged = []
+    merged_word = []
     i = 0
     while i < len(word_tuple):
-        if i < len(word_tuple) - 1 and (word_tuple[i], word_tuple[i + 1]) == merged_pair:
+        if i < len(word_tuple) - 1 and (word_tuple[i], word_tuple[i + 1]) == most_freq_pair:
             # append as a pair
-            merged.append(word_tuple[i] + word_tuple[i + 1])
+            merged_pair = b''.join(most_freq_pair)
+            merged_word.append(merged_pair)
+            new_right_pair = (merged_pair, word_tuple[i + 2])  if i + 2 < len(word_tuple) else None
+            if new_right_pair:
+                pairs_dict[new_right_pair]['w'].add(word_idx)
+                pairs_dict[new_right_pair]['c'] += word_freq
+            new_left_pair = (word_tuple[i - 1], merged_pair) if i > 0 else None
+            if new_left_pair:
+                pairs_dict[new_left_pair]['w'].add(word_idx)
+                pairs_dict[new_left_pair]['c'] += word_freq
+
             # update merged_pairs_dict to remove pairs that are no longer valid
             left_pair = (word_tuple[i - 1], word_tuple[i]) if i > 0 else None
             if left_pair:
-                merged_pairs_dict[left_pair]['c'] -= word_freq
+                pairs_dict[left_pair]['c'] -= word_freq
             right_pair = (word_tuple[i + 1], word_tuple[i + 2]) if i + 2 < len(word_tuple) else None
             if right_pair:
-                merged_pairs_dict[right_pair]['c'] -= word_freq
+                pairs_dict[right_pair]['c'] -= word_freq
             # skip the next byte as it's merged, move to the byte after next
             i += 2
         else:
-            merged.append(word_tuple[i])
+            merged_word.append(word_tuple[i])
             i += 1
-    return tuple(merged)
+    return tuple(merged_word)
 
 
 def bpe_tokenizing(input_path: str,
