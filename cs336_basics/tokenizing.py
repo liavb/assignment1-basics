@@ -155,13 +155,13 @@ def bpe_tokenizing(input_path: str,
     vocab = init_vocab()
     docs = split_docs_on_special_characters(input_path=input_path,
                                             special_tokens=special_tokens)
-    print(f'number of documents: {len(docs)}')
+    # print(f'number of documents: {len(docs)}')
     s = datetime.datetime.now()
     # pre-tokenizing each document to get word frequencies
     doc_word_freq_dicts = []
-    with multiprocessing.Pool() as pool:
+    with multiprocessing.Pool(processes=1) as pool:
         doc_word_freq_dicts = pool.map(pre_tokenizing, docs)
-    print('pre-tokenizing took:', datetime.datetime.now() - s)
+    # print('pre-tokenizing took:', datetime.datetime.now() - s)
 
 
     # Get the corpus word frequencies
@@ -182,7 +182,7 @@ def bpe_tokenizing(input_path: str,
         token_bytes = b''.join(bytes_tuple)
         max_token+= 1
         vocab[max_token] = token_bytes
-    print('merging took:', datetime.datetime.now() - s)
+    # print('merging took:', datetime.datetime.now() - s)
 
     return vocab, merges
 #
