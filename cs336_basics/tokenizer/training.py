@@ -2,11 +2,8 @@ import datetime
 import multiprocessing
 import regex as re
 from collections import Counter, defaultdict
-
+import pickle
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-
-
-
 
 
 
@@ -26,9 +23,9 @@ def split_docs_on_special_characters(input_path: str,
     stories = [s for s in stories if s.strip()]
     return stories
 
-def pre_tokenizing(story: str) -> tuple[dict[int, int], list[tuple[bytes]]]:
+def pre_tokenizing(text: str) -> tuple[dict[int, int], list[tuple[bytes]]]:
     # Count word frequencies
-    word_counter = Counter(match.group(0) for match in re.finditer(PAT, story))
+    word_counter = Counter(match.group(0) for match in re.finditer(PAT, text))
     # Map index to frequency
     # frequency_table = {tuple(c.encode('utf-8') for c in word): freq for idx, (word, freq) in enumerate(word_counter.items())}
     frequency_table =  {
@@ -155,20 +152,22 @@ def bpe_tokenizing(input_path: str,
     vocab = init_vocab()
     docs = split_docs_on_special_characters(input_path=input_path,
                                             special_tokens=special_tokens)
-    # print(f'number of documents: {len(docs)}')
+    num_docs = len(docs)
+    print(f'number of documents: {num_docs}')
     s = datetime.datetime.now()
     # pre-tokenizing each document to get word frequencies
     doc_word_freq_dicts = []
-    with multiprocessing.Pool(processes=1) as pool:
+    with multiprocessing.Pool(processes=8) as pool:
         doc_word_freq_dicts = pool.map(pre_tokenizing, docs)
-    # print('pre-tokenizing took:', datetime.datetime.now() - s)
+    print('pre-tokenizing took:', datetime.datetime.now() - s)
 
-
+    s = datetime.datetime.now()
     # Get the corpus word frequencies
     corpus_word_freq = get_corpus_word_freq(doc_word_freq_dicts)
     word_list = list(corpus_word_freq.keys()) # keep words in a list
     # replace byte_tuples keys in corpus_word_freq with their index in the word_list (optimized memory usage)
     corpus_word_freq = {word_list.index(word): freq for word, freq in corpus_word_freq.items()}
+    print('getting corpus word frequencies took:', datetime.datetime.now() - s)
 
     s = datetime.datetime.now()
     # apply merges on the corpus
@@ -182,15 +181,24 @@ def bpe_tokenizing(input_path: str,
         token_bytes = b''.join(bytes_tuple)
         max_token+= 1
         vocab[max_token] = token_bytes
-    # print('merging took:', datetime.datetime.now() - s)
+    print('merging took:', datetime.datetime.now() - s)
+
+
+    # Save vocab and merges to disk
+    with open(f"open_web_vocab_vocab_size_{vocab_size}_num_docs_{num_docs}.pkl", "wb") as vocab_file:
+        pickle.dump(vocab, vocab_file)
+
+    with open(f"open_web_merges_vocab_size_{vocab_size}_num_docs_{num_docs}.pkl", "wb") as merges_file:
+        pickle.dump(merges, merges_file)
 
     return vocab, merges
 #
 if __name__ == "__main__":
     # Example usage
-    input_path = "../data/TinyStoriesV2-GPT4-train.txt"
+    input_path = "../../data/TinyStoriesV2-GPT4-valid.txt"
     special_tokens = ["<|endoftext|>"]
-    bpe_tokenizing(input_path=input_path,
+    vocab, merges = bpe_tokenizing(input_path=input_path,
                    special_tokens=special_tokens,
                    vocab_size=300)
+    a = 1
 
