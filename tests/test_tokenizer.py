@@ -4,7 +4,6 @@ import json
 import os
 # import resource
 import sys
-
 import psutil
 import pytest
 import tiktoken
@@ -325,7 +324,7 @@ def test_tinystories_sample_roundtrip():
         vocab_path=VOCAB_PATH,
         merges_path=MERGES_PATH,
     )
-    with open(FIXTURES_PATH / "tinystories_sample.txt") as f:
+    with open(FIXTURES_PATH / "tinystories_sample.txt", encoding='utf-8') as f:
         corpus_contents = f.read()
 
     ids = tokenizer.encode(corpus_contents)
@@ -389,7 +388,7 @@ def test_encode_iterable_tinystories_sample_roundtrip():
     with open(FIXTURES_PATH / "tinystories_sample.txt", encoding='utf-8') as f:
         for _id in tokenizer.encode_iterable(f):
             all_ids.append(_id)
-    with open(FIXTURES_PATH / "tinystories_sample.txt") as f:
+    with open(FIXTURES_PATH / "tinystories_sample.txt",  encoding='utf-8') as f:
         corpus_contents = f.read()
     assert tokenizer.decode(all_ids) == corpus_contents
 
