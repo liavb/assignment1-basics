@@ -15,12 +15,16 @@ def init_vocab():
 
 
 def split_docs_on_special_characters(input_path: str,
-                                     special_tokens: list):
+                                     special_tokens: list,
+                                     num_sample_docs: int = None) -> list[str]:
+
     with open(input_path, "r", encoding="utf-8") as f:
         data = f.read()
     split_pattern = "|".join([re.escape(token) for token in special_tokens])
     stories = re.split(split_pattern, data)
-    stories = [s for s in stories if s.strip()]
+    if num_sample_docs is None:
+        num_sample_docs = len(stories)
+    stories = [s for s in stories if s.strip()][:num_sample_docs]
     return stories
 
 def pre_tokenizing(text: str) -> tuple[dict[int, int], list[tuple[bytes]]]:
@@ -53,6 +57,8 @@ def merge(corpus_word_freq: dict[int, int], word_list: list[tuple[bytes]], n_ite
 
     frequent_merges = []
     for i in range(n_iterations):
+        if len(pairs_dict) == 0:
+            break
         # Find the most frequent pair
         most_freq_pair, stats = max(pairs_dict.items(), key=sort_by_count_and_lex)
         frequent_merges.append(most_freq_pair)
@@ -147,11 +153,13 @@ def merge_and_update_pairs_dict(word_tuple: tuple[bytes],
 
 def bpe_tokenizing(input_path: str,
                    vocab_size: int,
-                   special_tokens: list[str]):
+                   special_tokens: list[str],
+                   num_sample_docs: int = None):
 
     vocab = init_vocab()
     docs = split_docs_on_special_characters(input_path=input_path,
-                                            special_tokens=special_tokens)
+                                            special_tokens=special_tokens,
+                                            num_sample_docs=num_sample_docs)
     num_docs = len(docs)
     print(f'number of documents: {num_docs}')
     s = datetime.datetime.now()
@@ -198,7 +206,8 @@ if __name__ == "__main__":
     input_path = "../../data/TinyStoriesV2-GPT4-valid.txt"
     special_tokens = ["<|endoftext|>"]
     vocab, merges = bpe_tokenizing(input_path=input_path,
-                   special_tokens=special_tokens,
-                   vocab_size=300)
+                                   special_tokens=special_tokens,
+                                   vocab_size=10_000,
+                                   num_sample_docs=10)
     a = 1
 
