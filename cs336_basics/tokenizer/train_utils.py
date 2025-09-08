@@ -5,20 +5,30 @@ from collections import Counter, defaultdict
 import pickle
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
+
+from functools import lru_cache
+
+@lru_cache(maxsize=None)
+def _inv_pad(b: bytes) -> bytes:
+    """Invert bytes and pad with 0xFF to fix prefix ordering."""
+    return bytes(255 - x for x in b) + b'\xff'
+
 def build_heap(pairs_dict):
-    # Build the heap sorted by count descending, then lexicographical order descending
-    heap = [(-stats['c'], tuple(reversed(pair))) for pair, stats in pairs_dict.items()]
+    """
+    Heap item: (-count, inv_pad(a), inv_pad(b), original_pair)
+    → pop gives: max count, then pair DESC (tuple-lex on (a, b)).
+    """
+    heap = [(-s['c'], _inv_pad(p[0]), _inv_pad(p[1]), p)
+            for p, s in pairs_dict.items() if s['c'] > 0]
     heapq.heapify(heap)
     return heap
 
 def push_to_heap(heap, count, pair):
-    # Push a new element to the heap
-    heapq.heappush(heap, (-count, tuple(reversed(pair))))
+    heapq.heappush(heap, (-count, _inv_pad(pair[0]), _inv_pad(pair[1]), pair))
 
 def pop_from_heap(heap):
-    # Pop the highest-priority element from the heap
-    neg_count, reversed_pair = heapq.heappop(heap)
-    return -neg_count, tuple(reversed(reversed_pair))
+    negc, _ka, _kb, pair = heapq.heappop(heap)
+    return -negc, pair
 
 def init_vocab():
     vocab = {256: "<|endoftext|>".encode('utf-8')}
@@ -74,8 +84,7 @@ def merge(corpus_word_freq: dict[int, int], word_list: list[tuple[bytes]], n_ite
     frequent_merges = []
     for i in range(n_iterations):
         while heap:
-            neg_count, most_freq_pair = pop_from_heap(heap)
-            count = -neg_count
+            count, most_freq_pair = pop_from_heap(heap)
             # Check if the count is up-to-date
             if most_freq_pair in pairs_dict and pairs_dict[most_freq_pair]['c'] == count:
                 break
@@ -86,10 +95,11 @@ def merge(corpus_word_freq: dict[int, int], word_list: list[tuple[bytes]], n_ite
         # Find the most frequent pair
         # most_freq_pair, stats = max(pairs_dict.items(), key=sort_by_count_and_lex)
         frequent_merges.append(most_freq_pair)
+        most_freq_pair_word_indicies = pairs_dict[most_freq_pair]['w']  # contains indices of words where most_freq_pair appears
         pairs_dict.pop(most_freq_pair)
 
 
-        most_freq_pair_word_indicies = pairs_dict[most_freq_pair]['w'] # stats['w'] contains indices of words where most_freq_pair appears
+
         for idx in most_freq_pair_word_indicies: # iterate over all the words containing the most frequent pair
             word_tuple = word_list[idx]
             word_freq = corpus_word_freq[idx]
@@ -254,5 +264,18 @@ if __name__ == "__main__":
                                    num_sample_docs=100000,
                                    save_to_disk=True)
     print('total time taken:', datetime.datetime.now() - s)
-    a = 1
+    # a = 1
+    # pairs_dict = {
+    #     (b' a', b'nd'): {'c': 609, 'w': {0, 1, 2}},
+    #     (b' ', b'd'): {'c': 609, 'w': {0, 1, 2}},
+    #     (b't', b'h'): {'c': 400, 'w': {0, 1, 2}},
+    #     (b' c', b'om'): {'c': 400, 'w': {0, 1, 2}},
+    #     (b' a', b'b'): {'c': 300, 'w': {2}},
+    # }
+    # heap = build_heap(pairs_dict)
+    # while heap:
+    #     a,b = pop_from_heap(heap)
+    #     print(a,b)
+
+    # p1 = ((609, (b' a', b'nd'))),  (609, (b' ', b'd'))
 
