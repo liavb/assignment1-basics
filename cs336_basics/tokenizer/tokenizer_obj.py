@@ -147,7 +147,7 @@ if __name__ == "__main__":
     vocab_path = r"C:\github\assignment1-basics-fork\cs336_basics\tokenizer\TinyStoriesV2_GPT4_train_vocab_vocab_size_10000_num_docs_2413403.pkl"
     merges_path = r"C:\github\assignment1-basics-fork\cs336_basics\tokenizer\TinyStoriesV2_GPT4_train_merges_vocab_size_10000_num_docs_2413403.pkl"
     tokenizer = Tokenizer.from_files(vocab_filepath=vocab_path, merges_filepath=merges_path, special_tokens=['<|endoftext|>'])
-    data_set_path = r'C:\github\assignment1-basics-fork\data\TinyStoriesV2-GPT4-valid.txt'
+    data_set_path = r'C:\github\assignment1-basics-fork\data\TinyStoriesV2-GPT4-train.txt'
     ds_name = os.path.basename(data_set_path).split('.')[0].replace('-', '_')
     file_handle = open(data_set_path, 'r',   encoding='utf8')
 
