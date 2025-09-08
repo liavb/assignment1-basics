@@ -6,20 +6,19 @@ import pickle
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
 def build_heap(pairs_dict):
-    # Build the heap sorted by count descending, then lexicographical order ascending
-    heap = [(-stats['c'], pair) for pair, stats in pairs_dict.items()]
+    # Build the heap sorted by count descending, then lexicographical order descending
+    heap = [(-stats['c'], tuple(reversed(pair))) for pair, stats in pairs_dict.items()]
     heapq.heapify(heap)
     return heap
 
-
 def push_to_heap(heap, count, pair):
     # Push a new element to the heap
-    heapq.heappush(heap, (-count, pair))
-
+    heapq.heappush(heap, (-count, tuple(reversed(pair))))
 
 def pop_from_heap(heap):
     # Pop the highest-priority element from the heap
-    return heapq.heappop(heap)
+    neg_count, reversed_pair = heapq.heappop(heap)
+    return -neg_count, tuple(reversed(reversed_pair))
 
 def init_vocab():
     vocab = {256: "<|endoftext|>".encode('utf-8')}
@@ -75,19 +74,17 @@ def merge(corpus_word_freq: dict[int, int], word_list: list[tuple[bytes]], n_ite
     frequent_merges = []
     for i in range(n_iterations):
         while heap:
-            neg_count, pair = pop_from_heap(heap)
+            neg_count, most_freq_pair = pop_from_heap(heap)
             count = -neg_count
             # Check if the count is up-to-date
-            if pair in pairs_dict and pairs_dict[pair]['c'] == count:
+            if most_freq_pair in pairs_dict and pairs_dict[most_freq_pair]['c'] == count:
                 break
-            else: # if the count is stale then just remove from the heap
-                pop_from_heap(heap)
+
         if not heap:
             break
 
         # Find the most frequent pair
         # most_freq_pair, stats = max(pairs_dict.items(), key=sort_by_count_and_lex)
-        _, most_freq_pair = pop_from_heap(heap)
         frequent_merges.append(most_freq_pair)
         pairs_dict.pop(most_freq_pair)
 
