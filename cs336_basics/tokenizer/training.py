@@ -203,11 +203,11 @@ def bpe_tokenizing(input_path: str,
 #
 if __name__ == "__main__":
     # Example usage
-    input_path = "../../data/TinyStoriesV2-GPT4-valid.txt"
+    input_path = "../../data/TinyStoriesV2-GPT4-train.txt"
     special_tokens = ["<|endoftext|>"]
     vocab, merges = bpe_tokenizing(input_path=input_path,
                                    special_tokens=special_tokens,
                                    vocab_size=10_000,
-                                   num_sample_docs=10)
+                                   num_sample_docs=1_000_000)
     a = 1
 
