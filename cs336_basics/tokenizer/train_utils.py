@@ -5,7 +5,21 @@ from collections import Counter, defaultdict
 import pickle
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
+def build_heap(pairs_dict):
+    # Build the heap sorted by count descending, then lexicographical order ascending
+    heap = [(-stats['c'], pair) for pair, stats in pairs_dict.items()]
+    heapq.heapify(heap)
+    return heap
 
+
+def push_to_heap(heap, count, pair):
+    # Push a new element to the heap
+    heapq.heappush(heap, (-count, pair))
+
+
+def pop_from_heap(heap):
+    # Pop the highest-priority element from the heap
+    return heapq.heappop(heap)
 
 def init_vocab():
     vocab = {256: "<|endoftext|>".encode('utf-8')}
@@ -54,18 +68,31 @@ def merge(corpus_word_freq: dict[int, int], word_list: list[tuple[bytes]], n_ite
     Returns a list of merged byte pairs.
     """
     pairs_dict = merge_consecutive_bytes_pairs(corpus_word_freq, word_list)
+    # Convert pairs_dict to a heap
+    heap = build_heap(pairs_dict)
+
 
     frequent_merges = []
     for i in range(n_iterations):
-        if len(pairs_dict) == 0:
+        while heap:
+            neg_count, pair = pop_from_heap(heap)
+            count = -neg_count
+            # Check if the count is up-to-date
+            if pair in pairs_dict and pairs_dict[pair]['c'] == count:
+                break
+            else: # if the count is stale then just remove from the heap
+                pop_from_heap(heap)
+        if not heap:
             break
+
         # Find the most frequent pair
-        most_freq_pair, stats = max(pairs_dict.items(), key=sort_by_count_and_lex)
+        # most_freq_pair, stats = max(pairs_dict.items(), key=sort_by_count_and_lex)
+        _, most_freq_pair = pop_from_heap(heap)
         frequent_merges.append(most_freq_pair)
         pairs_dict.pop(most_freq_pair)
 
 
-        most_freq_pair_word_indicies = stats['w'] # stats['w'] contains indices of words where most_freq_pair appears
+        most_freq_pair_word_indicies = pairs_dict[most_freq_pair]['w'] # stats['w'] contains indices of words where most_freq_pair appears
         for idx in most_freq_pair_word_indicies: # iterate over all the words containing the most frequent pair
             word_tuple = word_list[idx]
             word_freq = corpus_word_freq[idx]
@@ -74,7 +101,8 @@ def merge(corpus_word_freq: dict[int, int], word_list: list[tuple[bytes]], n_ite
                                                       most_freq_pair=most_freq_pair,
                                                       pairs_dict=pairs_dict,
                                                       word_freq=word_freq,
-                                                      word_idx=idx)
+                                                      word_idx=idx,
+                                                      heap=heap)
             word_list[idx] = merged_word
 
     return frequent_merges
@@ -87,6 +115,7 @@ def sort_by_count_and_lex(item):
     pair = item[0]
     return count, pair
 
+import heapq
 def merge_consecutive_bytes_pairs(frequency_table: dict[int, int],
                                   word_list: list[tuple[bytes]]) -> dict:
     """
@@ -101,6 +130,9 @@ def merge_consecutive_bytes_pairs(frequency_table: dict[int, int],
             pairs_dict[pair]['c'] += freq
             pairs_dict[pair]['w'].add(idx)
 
+
+
+
     return pairs_dict
 
 
@@ -109,7 +141,8 @@ def merge_and_update_pairs_dict(word_tuple: tuple[bytes],
                                 most_freq_pair: tuple[bytes],
                                 pairs_dict: dict,
                                 word_freq:int,
-                                word_idx: int) -> tuple[bytes]:
+                                word_idx: int,
+                                heap) -> tuple[bytes]:
     """
        Merges the most frequent byte pair in a word tuple into a single element, updates the pairs dictionary,
     and adjusts counts for affected pairs.
@@ -119,42 +152,50 @@ def merge_and_update_pairs_dict(word_tuple: tuple[bytes],
     - Adding new pairs formed by the merged element and its neighbors.
     - Removing or decrementing counts for pairs that are no longer valid due to the merge.
     """
-
+    merged_pair = b''.join(most_freq_pair)
     merged_word = []
     i = 0
+    updated_pairs = set()
     while i < len(word_tuple):
         if i < len(word_tuple) - 1 and (word_tuple[i], word_tuple[i + 1]) == most_freq_pair:
             # append as a pair
-            merged_pair = b''.join(most_freq_pair)
             merged_word.append(merged_pair)
             new_right_pair = (merged_pair, word_tuple[i + 2])  if i + 2 < len(word_tuple) else None
             if new_right_pair:
                 pairs_dict[new_right_pair]['w'].add(word_idx)
                 pairs_dict[new_right_pair]['c'] += word_freq
+                updated_pairs.add(new_right_pair)
             new_left_pair = (word_tuple[i - 1], merged_pair) if i > 0 else None
             if new_left_pair:
                 pairs_dict[new_left_pair]['w'].add(word_idx)
                 pairs_dict[new_left_pair]['c'] += word_freq
+                updated_pairs.add(new_left_pair)
 
             # update merged_pairs_dict to remove pairs that are no longer valid
             left_pair = (word_tuple[i - 1], word_tuple[i]) if i > 0 else None
             if left_pair:
                 pairs_dict[left_pair]['c'] -= word_freq
+                updated_pairs.add(left_pair)
             right_pair = (word_tuple[i + 1], word_tuple[i + 2]) if i + 2 < len(word_tuple) else None
             if right_pair:
                 pairs_dict[right_pair]['c'] -= word_freq
+                updated_pairs.add(right_pair)
             # skip the next byte as it's merged, move to the byte after next
             i += 2
         else:
             merged_word.append(word_tuple[i])
             i += 1
+
+    for pair in updated_pairs:
+        push_to_heap(heap, pairs_dict[pair]['c'], pair)
     return tuple(merged_word)
 
 
 def bpe_tokenizing(input_path: str,
                    vocab_size: int,
                    special_tokens: list[str],
-                   num_sample_docs: int = None):
+                   num_sample_docs: int = None,
+                   save_to_disk: bool = False) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
 
     vocab = init_vocab()
     docs = split_docs_on_special_characters(input_path=input_path,
@@ -174,7 +215,8 @@ def bpe_tokenizing(input_path: str,
     corpus_word_freq = get_corpus_word_freq(doc_word_freq_dicts)
     word_list = list(corpus_word_freq.keys()) # keep words in a list
     # replace byte_tuples keys in corpus_word_freq with their index in the word_list (optimized memory usage)
-    corpus_word_freq = {word_list.index(word): freq for word, freq in corpus_word_freq.items()}
+    word_to_idx = {w: i for i, w in enumerate(word_list)}
+    corpus_word_freq = {word_to_idx[w]: f for w, f in corpus_word_freq.items()}
     print('getting corpus word frequencies took:', datetime.datetime.now() - s)
 
     s = datetime.datetime.now()
@@ -183,31 +225,37 @@ def bpe_tokenizing(input_path: str,
     merges = merge(corpus_word_freq=corpus_word_freq,
                    word_list=word_list,
                    n_iterations=n_iterations)
+    print('merging took:', datetime.datetime.now() - s)
+
+    s = datetime.datetime.now()
     # update the vocabulary with the merges
     max_token = max(vocab.keys())
     for bytes_tuple in merges:
         token_bytes = b''.join(bytes_tuple)
         max_token+= 1
         vocab[max_token] = token_bytes
-    print('merging took:', datetime.datetime.now() - s)
+    print('after merge took:', datetime.datetime.now() - s)
 
+    if save_to_disk:
+        # Save vocab and merges to disk
+        with open(f"open_web_vocab_vocab_size_{vocab_size}_num_docs_{num_docs}.pkl", "wb") as vocab_file:
+            pickle.dump(vocab, vocab_file)
 
-    # Save vocab and merges to disk
-    with open(f"open_web_vocab_vocab_size_{vocab_size}_num_docs_{num_docs}.pkl", "wb") as vocab_file:
-        pickle.dump(vocab, vocab_file)
-
-    with open(f"open_web_merges_vocab_size_{vocab_size}_num_docs_{num_docs}.pkl", "wb") as merges_file:
-        pickle.dump(merges, merges_file)
+        with open(f"open_web_merges_vocab_size_{vocab_size}_num_docs_{num_docs}.pkl", "wb") as merges_file:
+            pickle.dump(merges, merges_file)
 
     return vocab, merges
 #
 if __name__ == "__main__":
     # Example usage
-    input_path = "../../data/TinyStoriesV2-GPT4-valid.txt"
+    input_path = "../../data/TinyStoriesV2-GPT4-train.txt"
     special_tokens = ["<|endoftext|>"]
+    s = datetime.datetime.now()
     vocab, merges = bpe_tokenizing(input_path=input_path,
                                    special_tokens=special_tokens,
                                    vocab_size=10_000,
-                                   num_sample_docs=10)
+                                   num_sample_docs=100000,
+                                   save_to_disk=True)
+    print('total time taken:', datetime.datetime.now() - s)
     a = 1
 

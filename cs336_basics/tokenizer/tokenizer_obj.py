@@ -95,27 +95,6 @@ class Tokenizer:
                         candidates.update(new_candidates)
                     tokens.extend([self.reversed_vocab[k] for k in word_bytes])
 
-
-        # tokens = []
-        # for match  in self.RX.finditer(text):
-        #     special_word = match .group("tok")
-        #     if special_word is not None:
-        #         tokens.extend([self.reversed_vocab[special_word.encode("utf8")]])
-        #     else:
-        #         # Core piece → run your usual pre-tokenization logic
-        #         piece = match.group("core")
-        #         # if you still want to re-apply PAT inside each piece:
-        #         for m in re.finditer(self.PAT, piece, re.V1):
-        #             sub = m.group(0)
-        #             word_bytes = sub.encode('utf-8')
-        #             candidates = self.get_initial_candidates(word=word_bytes)
-        #             word_bytes = [word_bytes[i:i+1] for i in range(len(word_bytes))]
-        #             while len(candidates) > 0:
-        #                 earliest_pair = min(candidates, key=candidates.get)
-        #                 candidates.pop(earliest_pair)
-        #                 word_bytes, new_candidates = self.merge_pair_word(word=word_bytes, pair_to_merge=earliest_pair)
-        #                 candidates.update(new_candidates)
-        #             tokens.extend([self.reversed_vocab[k] for k in word_bytes])
         return tokens
 
 
