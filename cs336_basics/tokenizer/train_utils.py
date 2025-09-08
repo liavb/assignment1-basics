@@ -1,5 +1,7 @@
 import datetime
 import multiprocessing
+import os.path
+
 import regex as re
 from collections import Counter, defaultdict
 import pickle
@@ -76,11 +78,17 @@ def merge(corpus_word_freq: dict[int, int], word_list: list[tuple[bytes]], n_ite
     Iteratively merges the most frequent consecutive byte pairs in the word list.
     Returns a list of merged byte pairs.
     """
+    s = datetime.datetime.now()
     pairs_dict = merge_consecutive_bytes_pairs(corpus_word_freq, word_list)
+    print('initial pairs dict creation took:', datetime.datetime.now() - s)
+    s = datetime.datetime.now()
     # Convert pairs_dict to a heap
     heap = build_heap(pairs_dict)
+    print('building heap took:', datetime.datetime.now() - s)
 
+    print('number of iterations:', n_iterations)
 
+    merge_and_update_runtimes = []
     frequent_merges = []
     for i in range(n_iterations):
         while heap:
@@ -99,19 +107,22 @@ def merge(corpus_word_freq: dict[int, int], word_list: list[tuple[bytes]], n_ite
         pairs_dict.pop(most_freq_pair)
 
 
-
         for idx in most_freq_pair_word_indicies: # iterate over all the words containing the most frequent pair
             word_tuple = word_list[idx]
             word_freq = corpus_word_freq[idx]
             # merge the most frequent pair into a single bytes object in the word tuple, update pairs_dict accordingly
+            s = datetime.datetime.now()
             merged_word = merge_and_update_pairs_dict(word_tuple=word_tuple,
                                                       most_freq_pair=most_freq_pair,
                                                       pairs_dict=pairs_dict,
                                                       word_freq=word_freq,
                                                       word_idx=idx,
                                                       heap=heap)
+            merge_and_update_runtimes.append(datetime.datetime.now() - s)
             word_list[idx] = merged_word
 
+    print('total merge and update time:', sum(merge_and_update_runtimes, datetime.timedelta()))
+    print('average merge and update time:', sum(merge_and_update_runtimes, datetime.timedelta()) / len(merge_and_update_runtimes))
     return frequent_merges
 
 
@@ -213,7 +224,7 @@ def bpe_tokenizing(input_path: str,
     s = datetime.datetime.now()
     # pre-tokenizing each document to get word frequencies
     doc_word_freq_dicts = []
-    with multiprocessing.Pool(processes=8) as pool:
+    with multiprocessing.Pool(processes=7) as pool:
         doc_word_freq_dicts = pool.map(pre_tokenizing, docs)
     print('pre-tokenizing took:', datetime.datetime.now() - s)
 
@@ -244,11 +255,12 @@ def bpe_tokenizing(input_path: str,
     print('after merge took:', datetime.datetime.now() - s)
 
     if save_to_disk:
+        ds =  os.path.basename(input_path).split('.')[0].replace('-', '_')
         # Save vocab and merges to disk
-        with open(f"open_web_vocab_vocab_size_{vocab_size}_num_docs_{num_docs}.pkl", "wb") as vocab_file:
+        with open(f"{ds}_vocab_vocab_size_{vocab_size}_num_docs_{num_docs}.pkl", "wb") as vocab_file:
             pickle.dump(vocab, vocab_file)
 
-        with open(f"open_web_merges_vocab_size_{vocab_size}_num_docs_{num_docs}.pkl", "wb") as merges_file:
+        with open(f"{ds}_merges_vocab_size_{vocab_size}_num_docs_{num_docs}.pkl", "wb") as merges_file:
             pickle.dump(merges, merges_file)
 
     return vocab, merges
@@ -256,26 +268,12 @@ def bpe_tokenizing(input_path: str,
 if __name__ == "__main__":
     # Example usage
     input_path = "../../data/TinyStoriesV2-GPT4-train.txt"
+    base_name = os.path.basename(input_path).split('.')[0].replace('-', '_')
     special_tokens = ["<|endoftext|>"]
     s = datetime.datetime.now()
     vocab, merges = bpe_tokenizing(input_path=input_path,
                                    special_tokens=special_tokens,
                                    vocab_size=10_000,
-                                   num_sample_docs=100000,
-                                   save_to_disk=True)
+                                   num_sample_docs=None,
+                                   save_to_disk=False)
     print('total time taken:', datetime.datetime.now() - s)
-    # a = 1
-    # pairs_dict = {
-    #     (b' a', b'nd'): {'c': 609, 'w': {0, 1, 2}},
-    #     (b' ', b'd'): {'c': 609, 'w': {0, 1, 2}},
-    #     (b't', b'h'): {'c': 400, 'w': {0, 1, 2}},
-    #     (b' c', b'om'): {'c': 400, 'w': {0, 1, 2}},
-    #     (b' a', b'b'): {'c': 300, 'w': {2}},
-    # }
-    # heap = build_heap(pairs_dict)
-    # while heap:
-    #     a,b = pop_from_heap(heap)
-    #     print(a,b)
-
-    # p1 = ((609, (b' a', b'nd'))),  (609, (b' ', b'd'))
-

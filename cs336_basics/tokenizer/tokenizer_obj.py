@@ -1,5 +1,10 @@
+import datetime
+import os.path
 from typing import Iterable, Iterator, List
 import regex as re
+import pickle
+import  numpy as np
+from array import array
 
 class Tokenizer:
     def __init__(self,
@@ -112,14 +117,60 @@ class Tokenizer:
         bytes_seq = b''.join([self.vocab[i] for i in ids])
         return bytes_seq.decode("utf8", errors='replace')
 
+    @classmethod
     def from_files(cls, vocab_filepath: str, merges_filepath: str, special_tokens=None):
+        with open(vocab_filepath, 'rb') as f:
+            vocab = pickle.load(f)
+
+        with open(merges_filepath, 'rb') as f:
+            merges = pickle.load(f)
+
+        tokenizer =  cls(vocab=vocab, merges=merges, special_tokens=special_tokens)
+        return tokenizer
+
         """method that constructs and return a Tokenizer from a serialized vocabulary and list of merges
         (in the same format that your BPE training code output) and (optionally) a list of special tokens."""
         raise NotImplementedError()
 
+
+def _encode_iterable(tokenizer, iterable):
+    """
+    We place tokenizer.encode_iterable into a separate function so we can limit memory
+    for just this function. We set the memory limit to 1MB.
+    """
+    yield from tokenizer.encode_iterable(iterable)
 #
 if __name__ == "__main__":
-    tokenizer = Tokenizer(vocab={0: b' ', 1: b'a', 2: b'c', 3: b'e', 4: b'h', 5: b't', 6: b'th', 7: b' c', 8: b' a', 9: b'the', 10: b' at'},
-                          merges=[(b't', b'h'), (b' ', b'c'), (b' ', b'a'), (b'th', b'e'), (b' a', b't')])
-    tokenizer.encode('the cat ate')
+    # Later: reload
+
+
+    vocab_path = r"C:\github\assignment1-basics-fork\cs336_basics\tokenizer\TinyStoriesV2_GPT4_train_vocab_vocab_size_10000_num_docs_2413403.pkl"
+    merges_path = r"C:\github\assignment1-basics-fork\cs336_basics\tokenizer\TinyStoriesV2_GPT4_train_merges_vocab_size_10000_num_docs_2413403.pkl"
+    tokenizer = Tokenizer.from_files(vocab_filepath=vocab_path, merges_filepath=merges_path, special_tokens=['<|endoftext|>'])
+    data_set_path = r'C:\github\assignment1-basics-fork\data\TinyStoriesV2-GPT4-valid.txt'
+    ds_name = os.path.basename(data_set_path).split('.')[0].replace('-', '_')
+    file_handle = open(data_set_path, 'r',   encoding='utf8')
+
+    s = datetime.datetime.now()
+    out_path = f"{ds_name}_tokens_u16.bin"
+    buf = array('H')  # unsigned 16-bit
+    with open(out_path, "wb") as f:
+        for tid in _encode_iterable(tokenizer, file_handle):
+            if tid > 0xFFFF:  # safety check
+                raise ValueError(f"Token id {tid} exceeds uint16 range")
+            buf.append(tid)
+        buf.tofile(f)  # flush once at the end
+
+    print('tokenizing runtime:', datetime.datetime.now() - s)
+    print('buffer length:', len(buf))
+
+    # later: load it back
+    tokens = np.fromfile(out_path, dtype=np.uint16)
+    print(f'buffer length: {len(buf)}')
+    print('tokens length:', len(tokens))
+
+
+    # tokenizer = Tokenizer(vocab={0: b' ', 1: b'a', 2: b'c', 3: b'e', 4: b'h', 5: b't', 6: b'th', 7: b' c', 8: b' a', 9: b'the', 10: b' at'},
+    #                       merges=[(b't', b'h'), (b' ', b'c'), (b' ', b'a'), (b'th', b'e'), (b' a', b't')])
+    # tokens = tokenizer.encode('the cat ate')
 
