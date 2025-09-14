@@ -8,6 +8,8 @@ from jaxtyping import Float, Int
 import numpy.typing as npt
 import torch
 from torch import Tensor
+from torch.cuda import device
+from cs336_basics.transformer import linear_layer
 
 
 def run_linear(
@@ -28,8 +30,11 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
-
-    raise NotImplementedError
+    linear_model = linear_layer.Linear(in_features=d_in, out_features=d_out)
+    state_dict = linear_model.state_dict()
+    state_dict['W'] = weights
+    linear_model.load_state_dict(state_dict)
+    return linear_model.forward(in_features)
 
 
 def run_embedding(
