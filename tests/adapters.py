@@ -9,7 +9,7 @@ import numpy.typing as npt
 import torch
 from torch import Tensor
 from torch.cuda import device
-from cs336_basics.transformer import linear_layer
+from cs336_basics.transformer import linear_layer, embedding_layer
 
 
 def run_linear(
@@ -55,8 +55,12 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
+    embedding_model = embedding_layer.Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
+    state_dict = embedding_model.state_dict()
+    state_dict['embedding'] = weights
+    embedding_model.load_state_dict(state_dict)
+    return embedding_model.forward(token_ids)
 
-    raise NotImplementedError
 
 
 def run_swiglu(
