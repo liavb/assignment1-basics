@@ -9,7 +9,7 @@ import numpy.typing as npt
 import torch
 from torch import Tensor
 from torch.cuda import device
-from cs336_basics.transformer import linear_layer, embedding_layer, norm_layer
+from cs336_basics.transformer import linear_layer, embedding_layer, norm_layer, swiglu_activation
 
 
 def run_linear(
@@ -85,6 +85,11 @@ def run_swiglu(
     Returns:
         Float[Tensor, "... d_model"]: Output embeddings of the same shape as the input embeddings.
     """
+    swiglu = swiglu_activation.SwigLU(d_model=d_model, d_ff=d_ff)
+    swiglu.Linear1.W.data = w1_weight
+    swiglu.Linear2.W.data = w2_weight
+    swiglu.Linear3.W.data = w3_weight
+    return swiglu.forward(in_features)
     # Example:
     # If your state dict keys match, you can use `load_state_dict()`
     # swiglu.load_state_dict(weights)
@@ -92,7 +97,6 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
 
 
 def run_scaled_dot_product_attention(
