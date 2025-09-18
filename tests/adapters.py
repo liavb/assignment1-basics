@@ -9,7 +9,7 @@ import numpy.typing as npt
 import torch
 from torch import Tensor
 from torch.cuda import device
-from cs336_basics.transformer import linear_layer, embedding_layer
+from cs336_basics.transformer import linear_layer, embedding_layer, norm_layer
 
 
 def run_linear(
@@ -387,7 +387,11 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    raise NotImplementedError
+    rmsnorm_layer = norm_layer.RMSNorm(d_model=d_model, eps=eps)
+    state_dict = rmsnorm_layer.state_dict()
+    state_dict['g'] = weights
+    rmsnorm_layer.load_state_dict(state_dict)
+    return rmsnorm_layer.forward(in_features)
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:

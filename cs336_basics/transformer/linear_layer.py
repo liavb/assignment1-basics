@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from einops import rearrange, einsum
+from einops import einsum
 
 
 class Linear(nn.Module):
@@ -11,7 +11,7 @@ class Linear(nn.Module):
         device: torch.device | None = None # Device to store the parameters on
         dtype: torch.dtype | None = None # Data type of the parameters
         self.W = nn.Parameter(
-            torch.empty(out_features, in_features, device=device, dtype=dtype)
+            torch.empty(out_features, in_features, device=device, dtype=dtype, requires_grad=True)
         )
         # Calculate standard deviation
         std = (2 / (in_features + out_features)) ** 0.5
