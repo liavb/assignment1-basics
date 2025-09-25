@@ -9,7 +9,7 @@ import numpy.typing as npt
 import torch
 from torch import Tensor
 from torch.cuda import device
-from cs336_basics.transformer import linear_layer, embedding_layer, norm_layer, swiglu_activation
+from cs336_basics.transformer import linear_layer, embedding_layer, norm_layer, swiglu_activation, utils
 from cs336_basics.transformer.embedding_layer import RotaryPositionalEmbedding
 
 
@@ -450,7 +450,8 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    raise NotImplementedError
+
+    return utils.softmax(in_features, dim)
 
 
 def run_cross_entropy(
