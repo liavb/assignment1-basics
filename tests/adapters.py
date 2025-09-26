@@ -10,6 +10,7 @@ import torch
 from torch import Tensor
 from torch.cuda import device
 from cs336_basics.transformer import linear_layer, embedding_layer, norm_layer, swiglu_activation, utils
+from cs336_basics.transformer.attention import scaled_dot_product_attention
 from cs336_basics.transformer.embedding_layer import RotaryPositionalEmbedding
 
 
@@ -118,7 +119,7 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    return scaled_dot_product_attention(Q=Q, K=K, V=V, mask=mask)
 
 
 def run_multihead_self_attention(
