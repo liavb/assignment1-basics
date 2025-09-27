@@ -1,7 +1,7 @@
 import torch
 from einops import einsum, rearrange
 from torch import nn as nn
-from cs336_basics.transformer.utils import scaled_dot_product_attention, SiLU
+from cs336_basics.transformer.utils import scaled_dot_product_attention, SiLU, softmax
 
 
 class Linear(nn.Module):
@@ -286,3 +286,37 @@ class TransformerBlock(nn.Module):
         y1 = x + self.mha(self.norm1(x), token_positions=token_positions)
         y2 = y1 + self.ffn(self.norm2(y1))
         return y2
+
+
+class TransformerLM(nn.Module):
+    def __init__(self, vocab_size: int,
+                 context_length: int,
+                 num_layers: int,
+                 d_model: int,
+                 num_heads: int,
+                 d_ff: int,
+                 theta: float):
+        super().__init__()
+        self.embedding_layer = Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
+        # Use nn.ModuleList instead of regular list so PyTorch registers the modules
+        self.transformer_blocks = nn.ModuleList()
+        for i in range(num_layers):
+            block = TransformerBlock(
+                d_model=d_model,
+                num_heads=num_heads,
+                d_ff=d_ff,
+                max_seq_len=context_length,
+                theta=theta
+            )
+            self.transformer_blocks.append(block)
+        self.out_norm = RMSNorm(d_model=d_model)
+        self.out_lin = Linear(in_features=d_model, out_features=vocab_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.embedding_layer(x)
+        for block in self.transformer_blocks:
+            x = block(x)
+        x = self.out_norm(x)
+        # Return raw logits, not probabilities - tests expect unnormalized output
+        logits = self.out_lin(x)
+        return logits

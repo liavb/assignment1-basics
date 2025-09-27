@@ -11,7 +11,7 @@ from torch import Tensor
 
 import cs336_basics.transformer.model_layers
 from cs336_basics.transformer import  utils
-from cs336_basics.transformer.model_layers import RotaryPositionalEmbedding, MultiHeadSelfAttention, TransformerBlock
+from cs336_basics.transformer.model_layers import RotaryPositionalEmbedding, MultiHeadSelfAttention, TransformerBlock, TransformerLM
 
 
 def run_linear(
@@ -353,7 +353,43 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    # Create TransformerLM instance
+    transformer = TransformerLM(vocab_size=vocab_size,
+                                context_length=context_length,
+                                num_layers=num_layers,
+                                d_model=d_model,
+                                num_heads=num_heads,
+                                d_ff=d_ff,
+                                theta=rope_theta)
+
+    # Load embedding weights
+    transformer.embedding_layer.embedding.data.copy_(weights['token_embeddings.weight'])
+
+    # Load transformer block weights for each layer
+    for layer_idx in range(num_layers):
+        block = transformer.transformer_blocks[layer_idx]
+
+        # Load attention weights
+        block.mha.q_proj.data.copy_(weights[f'layers.{layer_idx}.attn.q_proj.weight'])
+        block.mha.k_proj.data.copy_(weights[f'layers.{layer_idx}.attn.k_proj.weight'])
+        block.mha.v_proj.data.copy_(weights[f'layers.{layer_idx}.attn.v_proj.weight'])
+        block.mha.o_proj.data.copy_(weights[f'layers.{layer_idx}.attn.output_proj.weight'])
+
+        # Load normalization weights
+        block.norm1.g.data.copy_(weights[f'layers.{layer_idx}.ln1.weight'])
+        block.norm2.g.data.copy_(weights[f'layers.{layer_idx}.ln2.weight'])
+
+        # Load FFN weights
+        block.ffn.Linear1.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w1.weight'])
+        block.ffn.Linear2.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w2.weight'])
+        block.ffn.Linear3.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w3.weight'])
+
+    # Load final norm and output projection weights
+    transformer.out_norm.g.data.copy_(weights['ln_final.weight'])
+    transformer.out_lin.W.data.copy_(weights['lm_head.weight'])
+
+    # Run forward pass
+    return transformer(in_indices)
 
 
 def run_rmsnorm(
