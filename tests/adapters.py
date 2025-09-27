@@ -8,10 +8,10 @@ from jaxtyping import Float, Int
 import numpy.typing as npt
 import torch
 from torch import Tensor
-from torch.cuda import device
-from cs336_basics.transformer import linear_layer, embedding_layer, norm_layer, swiglu_activation, utils
-from cs336_basics.transformer.attention import scaled_dot_product_attention, MultiHeadSelfAttention
-from cs336_basics.transformer.embedding_layer import RotaryPositionalEmbedding
+
+import cs336_basics.transformer.model_layers
+from cs336_basics.transformer import  utils
+from cs336_basics.transformer.model_layers import RotaryPositionalEmbedding, MultiHeadSelfAttention, TransformerBlock
 
 
 def run_linear(
@@ -24,15 +24,15 @@ def run_linear(
     Given the weights of a Linear layer, compute the transformation of a batched input.
 
     Args:
-        in_dim (int): The size of the input dimension
-        out_dim (int): The size of the output dimension
+        d_in (int): The size of the input dimension
+        d_out (int): The size of the output dimension
         weights (Float[Tensor, "d_out d_in"]): The linear weights to use
         in_features (Float[Tensor, "... d_in"]): The output tensor to apply the function to
 
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
-    linear_model = linear_layer.Linear(in_features=d_in, out_features=d_out)
+    linear_model = cs336_basics.transformer.model_layers.Linear(in_features=d_in, out_features=d_out)
     state_dict = linear_model.state_dict()
     state_dict['W'] = weights
     linear_model.load_state_dict(state_dict)
@@ -57,7 +57,7 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
-    embedding_model = embedding_layer.Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
+    embedding_model = cs336_basics.transformer.model_layers.Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
     state_dict = embedding_model.state_dict()
     state_dict['embedding'] = weights
     embedding_model.load_state_dict(state_dict)
@@ -87,18 +87,11 @@ def run_swiglu(
     Returns:
         Float[Tensor, "... d_model"]: Output embeddings of the same shape as the input embeddings.
     """
-    swiglu = swiglu_activation.SwigLU(d_model=d_model, d_ff=d_ff)
+    swiglu = cs336_basics.transformer.model_layers.SwigLU(d_model=d_model, d_ff=d_ff)
     swiglu.Linear1.W.data = w1_weight
     swiglu.Linear2.W.data = w2_weight
     swiglu.Linear3.W.data = w3_weight
     return swiglu.forward(in_features)
-    # Example:
-    # If your state dict keys match, you can use `load_state_dict()`
-    # swiglu.load_state_dict(weights)
-    # You can also manually assign the weights
-    # swiglu.w1.weight.data = w1_weight
-    # swiglu.w2.weight.data = w2_weight
-    # swiglu.w3.weight.data = w3_weight
 
 
 def run_scaled_dot_product_attention(
@@ -119,7 +112,7 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    return scaled_dot_product_attention(Q=Q, K=K, V=V, mask=mask)
+    return utils.scaled_dot_product_attention(Q=Q, K=K, V=V, mask=mask)
 
 
 def run_multihead_self_attention(
@@ -259,7 +252,26 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    # Instantiate the reference TransformerBlock and load weights via a mapped state_dict
+    transformer_block = TransformerBlock(d_model=d_model, num_heads=num_heads, d_ff=d_ff, max_seq_len=max_seq_len, theta=theta)
+    # Copy attention projection weights into the MultiHeadSelfAttention instance
+    transformer_block.mha.q_proj.data.copy_(weights['attn.q_proj.weight'])
+    transformer_block.mha.k_proj.data.copy_(weights['attn.k_proj.weight'])
+    transformer_block.mha.v_proj.data.copy_(weights['attn.v_proj.weight'])
+    transformer_block.mha.o_proj.data.copy_(weights['attn.output_proj.weight'])
+
+    # Copy RMSNorm affine weights
+    transformer_block.norm1.g.data.copy_(weights['ln1.weight'])
+    transformer_block.norm2.g.data.copy_(weights['ln2.weight'])
+
+    # Copy Feed-Forward (SwiGLU) weights
+    transformer_block.ffn.Linear1.W.data.copy_(weights['ffn.w1.weight'])
+    transformer_block.ffn.Linear2.W.data.copy_(weights['ffn.w2.weight'])
+    transformer_block.ffn.Linear3.W.data.copy_(weights['ffn.w3.weight'])
+
+
+    # Call the block's forward; MHA will apply RoPE internally using default positions.
+    return transformer_block.forward(in_features)
 
 
 def run_transformer_lm(
@@ -364,7 +376,7 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    rmsnorm_layer = norm_layer.RMSNorm(d_model=d_model, eps=eps)
+    rmsnorm_layer = cs336_basics.transformer.model_layers.RMSNorm(d_model=d_model, eps=eps)
     state_dict = rmsnorm_layer.state_dict()
     state_dict['g'] = weights
     rmsnorm_layer.load_state_dict(state_dict)
