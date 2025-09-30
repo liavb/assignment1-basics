@@ -189,6 +189,7 @@ def run_transformer_block(
     max_seq_len: int,
     theta: float,
     weights: dict[str, Tensor],
+    # Create TransformerLM instance
     in_features: Float[Tensor, " batch sequence_length d_model"],
 ) -> Float[Tensor, " batch sequence_length d_model"]:
     """
@@ -196,6 +197,34 @@ def run_transformer_block(
     return the output of running the Transformer block on the input features.
 
     This function should use RoPE.
+    
+    # Load embedding weights
+    transformer.embedding_layer.embedding.data.copy_(weights['token_embeddings.weight'])
+    
+    # Load transformer block weights for each layer
+    for layer_idx in range(num_layers):
+        block = transformer.transformer_blocks[layer_idx]
+        
+        # Load attention weights
+        block.mha.q_proj.data.copy_(weights[f'layers.{layer_idx}.attn.q_proj.weight'])
+        block.mha.k_proj.data.copy_(weights[f'layers.{layer_idx}.attn.k_proj.weight'])
+        block.mha.v_proj.data.copy_(weights[f'layers.{layer_idx}.attn.v_proj.weight'])
+        block.mha.o_proj.data.copy_(weights[f'layers.{layer_idx}.attn.output_proj.weight'])
+        
+        # Load normalization weights
+        block.norm1.g.data.copy_(weights[f'layers.{layer_idx}.ln1.weight'])
+        block.norm2.g.data.copy_(weights[f'layers.{layer_idx}.ln2.weight'])
+        
+        # Load FFN weights
+        block.ffn.Linear1.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w1.weight'])
+        block.ffn.Linear2.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w2.weight'])
+        block.ffn.Linear3.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w3.weight'])
+    
+    # Load final norm and output projection weights
+    transformer.out_norm.g.data.copy_(weights['ln_final.weight'])
+    transformer.out_lin.W.data.copy_(weights['lm_head.weight'])
+    
+    # Run forward pass
     Depending on your implementation, you may simply need to pass the relevant args
     to your TransformerBlock constructor, or you may need to initialize your own RoPE
     class and pass that instead.
@@ -353,7 +382,6 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    # Create TransformerLM instance
     transformer = TransformerLM(vocab_size=vocab_size,
                                 context_length=context_length,
                                 num_layers=num_layers,
@@ -361,34 +389,6 @@ def run_transformer_lm(
                                 num_heads=num_heads,
                                 d_ff=d_ff,
                                 theta=rope_theta)
-
-    # Load embedding weights
-    transformer.embedding_layer.embedding.data.copy_(weights['token_embeddings.weight'])
-
-    # Load transformer block weights for each layer
-    for layer_idx in range(num_layers):
-        block = transformer.transformer_blocks[layer_idx]
-
-        # Load attention weights
-        block.mha.q_proj.data.copy_(weights[f'layers.{layer_idx}.attn.q_proj.weight'])
-        block.mha.k_proj.data.copy_(weights[f'layers.{layer_idx}.attn.k_proj.weight'])
-        block.mha.v_proj.data.copy_(weights[f'layers.{layer_idx}.attn.v_proj.weight'])
-        block.mha.o_proj.data.copy_(weights[f'layers.{layer_idx}.attn.output_proj.weight'])
-
-        # Load normalization weights
-        block.norm1.g.data.copy_(weights[f'layers.{layer_idx}.ln1.weight'])
-        block.norm2.g.data.copy_(weights[f'layers.{layer_idx}.ln2.weight'])
-
-        # Load FFN weights
-        block.ffn.Linear1.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w1.weight'])
-        block.ffn.Linear2.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w2.weight'])
-        block.ffn.Linear3.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w3.weight'])
-
-    # Load final norm and output projection weights
-    transformer.out_norm.g.data.copy_(weights['ln_final.weight'])
-    transformer.out_lin.W.data.copy_(weights['lm_head.weight'])
-
-    # Run forward pass
     return transformer(in_indices)
 
 
@@ -488,7 +488,7 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    raise NotImplementedError
+    return utils.crossEntropy(logits=inputs, targets=targets)
 
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
