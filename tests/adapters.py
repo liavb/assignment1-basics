@@ -12,6 +12,7 @@ from torch import Tensor
 import cs336_basics.transformer.model_layers
 from cs336_basics.transformer import  utils
 from cs336_basics.transformer.model_layers import RotaryPositionalEmbedding, MultiHeadSelfAttention, TransformerBlock, TransformerLM
+from cs336_basics.transformer.optimizer import AdamW
 
 
 def run_linear(
@@ -507,7 +508,7 @@ def get_adamw_cls() -> Any:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    raise NotImplementedError
+    return AdamW
 
 
 def run_get_lr_cosine_schedule(
