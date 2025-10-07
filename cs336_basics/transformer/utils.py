@@ -1,7 +1,42 @@
+import math
 import torch
 from einops import einsum
 from torch import nn as nn
 
+def gradient_clipping(parameters, max_l2_norm):
+    eps = 1e-6
+
+    # Compute the total norm across all parameters
+    total_norm = 0.0
+    for param in parameters:
+        if param.grad is not None:
+            param_norm = param.grad.data.norm(2)
+            total_norm += param_norm ** 2
+    total_norm = total_norm ** 0.5
+
+    # Compute the clipping coefficient
+    clip_coef = max_l2_norm / (total_norm + eps)
+
+    # Apply clipping if necessary
+    if clip_coef < 1:
+        for param in parameters:
+            if param.grad is not None:
+                param.grad.data.mul_(clip_coef)
+
+
+def get_lr_cosine_schedule(it: int,
+                           max_learning_rate: float,
+                           min_learning_rate: float,
+                           warmup_iters: int,
+                           cosine_cycle_iters: int):
+    if it < warmup_iters:
+        it_lr = (it/warmup_iters) * max_learning_rate
+    elif warmup_iters <= it <= cosine_cycle_iters:
+        it_lr = min_learning_rate + 0.5 * (1 + math.cos((it-warmup_iters)/(cosine_cycle_iters - warmup_iters) * math.pi)) * (max_learning_rate - min_learning_rate)
+    else:
+        it_lr = min_learning_rate
+
+    return it_lr
 
 def crossEntropy(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     """
