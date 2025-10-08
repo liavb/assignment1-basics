@@ -430,7 +430,7 @@ def main():
     # Initialize trainer and start training
     trainer = Trainer(config)
     trainer.train()
-
-
-if __name__ == "__main__":
-    main()
+#
+#
+# if __name__ == "__main__":
+#     main()

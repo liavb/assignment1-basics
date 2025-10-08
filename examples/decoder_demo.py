@@ -100,13 +100,13 @@ def demo_with_real_tokenizer():
 
     # Try to load a real tokenizer
     tokenizer_paths = [
-        "./cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_vocab_vocab_size_10000_num_docs_2413403.pkl",
-        "./open_web_vocab_vocab_size_1000_num_docs_6458.pkl"
+        "../cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_vocab_vocab_size_10000_num_docs_2413403.pkl",
+        # "../open_web_vocab_vocab_size_1000_num_docs_6458.pkl"
     ]
 
     merges_paths = [
-        "./cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_merges_vocab_size_10000_num_docs_2413403.pkl",
-        "./open_web_merges_vocab_size_1000_num_docs_6458.pkl"
+        "../cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_merges_vocab_size_10000_num_docs_2413403.pkl",
+        # "../open_web_merges_vocab_size_1000_num_docs_6458.pkl"
     ]
 
     tokenizer = None
@@ -156,7 +156,7 @@ def demo_with_real_tokenizer():
             print(f"Prompt tokens: {prompt_tokens}")
 
             # Generate with different temperatures
-            for temp in [0.5, 1.0, 1.5]:
+            for temp in [0.1, 0.5, 1.0]:
                 generated_text = decode_with_tokenizer(
                     model=model,
                     tokenizer=tokenizer,
@@ -213,9 +213,9 @@ if __name__ == "__main__":
     print("=" * 50)
 
     # Run all demos
-    demo_temperature_and_top_p()
-    demo_with_dummy_model()
+    # demo_temperature_and_top_p()
+    # demo_with_dummy_model()
     demo_with_real_tokenizer()
-    benchmark_generation_speed()
+    # benchmark_generation_speed()
 
     print("\nDemo complete!")
