@@ -9,9 +9,9 @@ import numpy.typing as npt
 import torch
 from torch import Tensor
 
-import cs336_basics.transformer.model_layers
+import  cs336_basics.transformer.model_layers
 from cs336_basics.transformer import nn_utils, data_utils
-from cs336_basics.transformer.model_layers import RotaryPositionalEmbedding, MultiHeadSelfAttention, TransformerBlock, TransformerLM
+from cs336_basics.transformer.model_layers import RotaryPositionalEmbedding, MultiHeadSelfAttention, TransformerBlock, TransformerLM, SiLU
 from cs336_basics.transformer.optimizer import AdamW
 
 
@@ -113,7 +113,7 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    return utils.scaled_dot_product_attention(Q=Q, K=K, V=V, mask=mask)
+    return nn_utils.scaled_dot_product_attention(Q=Q, K=K, V=V, mask=mask)
 
 
 def run_multihead_self_attention(
@@ -328,7 +328,7 @@ def run_transformer_lm(
         num_heads (int): Number of heads to use in multi-headed attention. `d_model` must be
             evenly divisible by `num_heads`.
         d_ff (int): Dimensionality of the feed-forward inner layer (section 3.3).
-        rope_theta (float): The RoPE $\Theta$ parameter.
+        rope_theta (float): The RoPE $\\Theta$ parameter.
         weights (dict[str, Tensor]):
             State dict of our reference implementation. {num_layers} refers to an
             integer between `0` and `num_layers - 1` (the layer index).
@@ -379,6 +379,7 @@ def run_transformer_lm(
         in_indices (Int[Tensor, "batch_size sequence_length"]) Tensor with input indices to run the language model on. Shape is (batch_size, sequence_length), where
             `sequence_length` is at most `context_length`.
 
+
     Returns:
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
@@ -390,6 +391,35 @@ def run_transformer_lm(
                                 num_heads=num_heads,
                                 d_ff=d_ff,
                                 theta=rope_theta)
+
+    # Manually load the provided weights by mapping the keys
+    # Load embedding weights
+    transformer.embedding_layer.embedding.data.copy_(weights['token_embeddings.weight'])
+
+    # Load transformer block weights for each layer
+    for layer_idx in range(num_layers):
+        block = transformer.transformer_blocks[layer_idx]
+
+        # Load attention weights
+        block.mha.q_proj.data.copy_(weights[f'layers.{layer_idx}.attn.q_proj.weight'])
+        block.mha.k_proj.data.copy_(weights[f'layers.{layer_idx}.attn.k_proj.weight'])
+        block.mha.v_proj.data.copy_(weights[f'layers.{layer_idx}.attn.v_proj.weight'])
+        block.mha.o_proj.data.copy_(weights[f'layers.{layer_idx}.attn.output_proj.weight'])
+
+        # Load normalization weights
+        block.norm1.g.data.copy_(weights[f'layers.{layer_idx}.ln1.weight'])
+        block.norm2.g.data.copy_(weights[f'layers.{layer_idx}.ln2.weight'])
+
+        # Load FFN weights
+        block.ffn.Linear1.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w1.weight'])
+        block.ffn.Linear2.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w2.weight'])
+        block.ffn.Linear3.W.data.copy_(weights[f'layers.{layer_idx}.ffn.w3.weight'])
+
+    # Load final norm and output projection weights
+    transformer.out_norm.g.data.copy_(weights['ln_final.weight'])
+    transformer.out_lin.W.data.copy_(weights['lm_head.weight'])
+
+    # Run forward pass
     return transformer(in_indices)
 
 
@@ -431,7 +461,8 @@ def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
         Float[Tensor,"..."]: of with the same shape as `in_features` with the output of applying
         SiLU to each element.
     """
-    raise NotImplementedError
+    return SiLU().forward(in_features)
+
 
 
 def run_get_batch(
@@ -471,7 +502,7 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         softmax normalizing the specified `dim`.
     """
 
-    return utils.softmax(in_features, dim)
+    return nn_utils.softmax(in_features, dim)
 
 
 def run_cross_entropy(
@@ -489,7 +520,7 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    return utils.crossEntropy(logits=inputs, targets=targets)
+    return nn_utils.crossEntropy(logits=inputs, targets=targets)
 
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
@@ -501,7 +532,7 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
-    utils.gradient_clipping(parameters, max_l2_norm)
+    nn_utils.gradient_clipping(parameters, max_l2_norm)
 
 
 def get_adamw_cls() -> Any:
@@ -536,7 +567,7 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    return utils.get_lr_cosine_schedule(it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
+    return nn_utils.get_lr_cosine_schedule(it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
 
 
 def run_save_checkpoint(

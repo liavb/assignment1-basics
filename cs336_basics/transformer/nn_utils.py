@@ -4,13 +4,33 @@ from einops import einsum
 from torch import nn as nn
 
 def gradient_clipping(parameters, max_l2_norm):
-    eps = 10**-6
+    """
+    Clip gradients by global norm.
+
+    Args:
+        parameters: Iterable of parameters with gradients
+        max_l2_norm: Maximum allowed L2 norm of gradients
+    """
+    # Collect all gradients
+    grads = []
     for param in parameters:
         if param.grad is not None:
-            param_norm = param.grad.data.norm(2)
-            clip_coef = max_l2_norm / (param_norm + eps)
-            if clip_coef < 1:
-                param.grad.data = param_norm * clip_coef
+            grads.append(param.grad.view(-1))
+
+    if not grads:
+        return
+
+    # Compute total norm across all gradients
+    total_norm = torch.norm(torch.cat(grads), p=2)
+
+    # Compute clipping coefficient
+    clip_coef = max_l2_norm / (total_norm + 1e-6)
+
+    # Apply clipping if needed
+    if clip_coef < 1:
+        for param in parameters:
+            if param.grad is not None:
+                param.grad.data.mul_(clip_coef)
 
 
 def get_lr_cosine_schedule(it: int,
