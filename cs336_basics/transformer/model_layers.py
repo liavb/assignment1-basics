@@ -1,7 +1,7 @@
 import torch
 from einops import einsum, rearrange
 from torch import nn as nn
-from cs336_basics.transformer.utils import scaled_dot_product_attention, SiLU, softmax
+from cs336_basics.transformer.nn_utils import scaled_dot_product_attention, SiLU, softmax
 
 
 class Linear(nn.Module):
