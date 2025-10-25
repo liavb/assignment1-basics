@@ -28,7 +28,7 @@ torch.set_flush_denormal(True)  # Improve numerical performance
 # CONFIGURATION - Edit these to change training
 # ============================================================
 BATCH_SIZE = 8          # Small for CPU speed
-CONTEXT_LENGTH = 256    # Short for CPU speed
+CONTEXT_LENGTH = 128    # Short for CPU speed
 TOTAL_STEPS = 350      # Quick training
 LEARNING_RATE = 3e-4
 EVAL_EVERY = 50        # Evaluate every N steps
