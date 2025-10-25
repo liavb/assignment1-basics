@@ -155,6 +155,19 @@ class Trainer:
             theta=config.rope_theta
         ).to(self.device)
 
+        # Apply torch.compile for speedup based on device
+        device_type = str(self.device.type)
+        if device_type == "cpu":
+            print("Compiling model for CPU with torch.compile...", flush=True)
+            self.model = torch.compile(self.model)
+        elif device_type == "mps":
+            print("Compiling model for MPS with backend='aot_eager'...", flush=True)
+            self.model = torch.compile(self.model, backend="aot_eager")
+            print("Note: Not using TF32 kernels on MPS (causes instability)", flush=True)
+        elif device_type == "cuda":
+            print("Enabling TF32 for CUDA (faster matmul)...", flush=True)
+            torch.set_float32_matmul_precision('high')
+
         # Initialize optimizer
         self.optimizer = AdamW(
             self.model.parameters(),

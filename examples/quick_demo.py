@@ -2,13 +2,15 @@
 """
 Quick demo: Train a tiny transformer and generate text in under 30 seconds.
 This is a minimal working example that demonstrates the complete pipeline.
+
+Note: This uses the task 7.2 model architecture but with reduced training.
+For full task 7.2 training (327M tokens), see task_7_2_training.py
 """
 
 import os
 import sys
 import time
 import pickle
-import torch
 import numpy as np
 
 # Add the project root to the path
@@ -24,8 +26,12 @@ from cs336_basics.decoder import decode_with_tokenizer
 
 def load_tokenizer():
     """Load the TinyStories tokenizer"""
-    vocab_path = "./cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_vocab_vocab_size_10000_num_docs_2413403.pkl"
-    merges_path = "./cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_merges_vocab_size_10000_num_docs_2413403.pkl"
+    # Get the project root directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+
+    vocab_path = os.path.join(project_root, "cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_vocab_vocab_size_10000_num_docs_2413403.pkl")
+    merges_path = os.path.join(project_root, "cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_merges_vocab_size_10000_num_docs_2413403.pkl")
 
     with open(vocab_path, 'rb') as f:
         vocab = pickle.load(f)
@@ -36,30 +42,39 @@ def load_tokenizer():
 
 
 def create_tiny_model(vocab_size):
-    """Create a very small model for fast training"""
+    """Create model according to task 7.2 specifications (but we'll train it quickly)"""
     return TransformerLM(
         vocab_size=vocab_size,
-        context_length=128,  # Small context
-        num_layers=6,        # Very few layers
-        d_model=512,         # Small dimension
-        num_heads=8,         # Few heads
-        d_ff=2048,           # Small FFN
-        theta=10000.0
+        context_length=256,  # Task 7.2 spec
+        num_layers=4,        # Task 7.2 spec
+        d_model=512,         # Task 7.2 spec
+        num_heads=16,        # Task 7.2 spec
+        d_ff=1344,           # Task 7.2 spec (8/3 * d_model, multiple of 64)
+        theta=10000.0        # Task 7.2 spec
     )
 
 
 def quick_train(model, train_data, device="cpu", iterations=150):
-    """Train model very quickly"""
+    """Train model very quickly (reduced version of task 7.2 training)"""
+    import torch
+
     model.to(device)
     model.train()
 
-    optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=0.1)
+    # Use AdamW with task 7.2 hyperparameters
+    optimizer = AdamW(
+        model.parameters(),
+        lr=3e-4,           # Good default from task 7.2 tuning
+        betas=(0.9, 0.999),
+        eps=1e-8,
+        weight_decay=0.1
+    )
 
     print(f"Quick training for {iterations} iterations...")
 
     for i in range(iterations):
-        # Small batch for speed
-        x, y = get_batch(train_data, batch_size=4, context_length=32, device=device)
+        # Small batch for speed (task 7.2 uses batch_size=32, context=256)
+        x, y = get_batch(train_data, batch_size=4, context_length=64, device=device)
 
         # Forward pass
         logits = model(x)
@@ -71,14 +86,14 @@ def quick_train(model, train_data, device="cpu", iterations=150):
         optimizer.step()
 
         if i % 10 == 0:
-            print(f"  Iteration {i:2d} | Loss: {loss.item():.3f}")
+            print(f"  Iteration {i:3d} | Loss: {loss.item():.3f}")
 
     print("Training complete!")
     return model
 
 
-def test_generation(model, tokenizer, device="cpu"):
-    """Test text generation with various prompts"""
+def demo_generation(model, tokenizer, device="cpu"):
+    """Demo text generation with various prompts"""
     print("\nTesting text generation...")
 
     prompts = [
@@ -115,7 +130,7 @@ def test_generation(model, tokenizer, device="cpu"):
 
 
 def main():
-    print("🚀 Quick Transformer Demo")
+    print("🚀 Quick Transformer Demo (Task 7.2 Architecture)")
     print("=" * 40)
 
     try:
@@ -132,7 +147,10 @@ def main():
 
         # 3. Load small amount of training data
         print("3. Loading training data...")
-        train_data = load_dataset_mmap("./cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_tokens_u16.bin", dtype=np.uint16)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(script_dir)
+        train_data_path = os.path.join(project_root, "cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_tokens_u16.bin")
+        train_data = load_dataset_mmap(train_data_path, dtype=np.uint16)
         print(f"   Data size: {len(train_data):,} tokens")
 
         # 4. Quick training (very fast)
@@ -144,11 +162,14 @@ def main():
 
         # 5. Test generation
         print("5. Testing generation...")
-        test_generation(model, tokenizer)
+        demo_generation(model, tokenizer)
 
         print("\n" + "=" * 40)
         print("✅ Demo completed successfully!")
         print("The model learned to generate text!")
+        print("\nℹ️  This was a quick demo with limited training.")
+        print("For full Task 7.2 training (327M tokens), run:")
+        print("  python examples/task_7_2_training.py")
 
         # Interactive mode
         print("\n🎯 Try your own prompts:")
