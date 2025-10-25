@@ -177,10 +177,4 @@ def main():
         interactive_generation(model, tokenizer, device="cpu")
 
     print("\n" + "="*60)
-    print("TESTING COMPLETE!")
-    print("="*60)
-
-
-if __name__ == "__main__":
-    main()
 

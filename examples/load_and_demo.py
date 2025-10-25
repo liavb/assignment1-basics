@@ -21,6 +21,7 @@ def load_tokenizer(project_root):
     vocab_path = os.path.join(project_root, "cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_vocab_vocab_size_10000_num_docs_2413403.pkl")
     merges_path = os.path.join(project_root, "cs336_basics/tokenizer/TinyStoriesV2_GPT4_train_merges_vocab_size_10000_num_docs_2413403.pkl")
 
+
     with open(vocab_path, 'rb') as f:
         vocab = pickle.load(f)
     with open(merges_path, 'rb') as f:
@@ -39,8 +40,8 @@ def demo_sentence_completion(model, tokenizer, device="cpu"):
         "Once upon a time",
         "The little girl",
         "In the forest",
-        "The big red",
-        "One day a boy"
+        # "The big red",
+        # "One day a boy"
     ]
 
     model.eval()
@@ -50,12 +51,12 @@ def demo_sentence_completion(model, tokenizer, device="cpu"):
 
         try:
             # Generate with different temperatures
-            for temp in [0.7, 1.0]:
+            for temp in [0.1, 0.5, 1]:
                 generated = decode_with_tokenizer(
                     model=model,
                     tokenizer=tokenizer,
                     prompt=prompt,
-                    max_new_tokens=30,
+                    max_new_tokens=50,
                     temperature=temp,
                     top_p=0.9,
                     device=device
@@ -87,7 +88,7 @@ def load_saved_model(model_path, vocab_size, device="cpu"):
     # Create model with Task 7.2 architecture
     model = TransformerLM(
         vocab_size=vocab_size,
-        context_length=256,
+        context_length=128,
         num_layers=4,
         d_model=512,
         num_heads=16,
@@ -126,14 +127,14 @@ def interactive_mode(model, tokenizer, device="cpu"):
             if not prompt:
                 continue
 
-            print(f"\nGenerating (temp=0.8, top_p=0.9)...", flush=True)
+            print(f"\nGenerating (temp=0.25, top_p=0.9)...", flush=True)
 
             generated = decode_with_tokenizer(
                 model=model,
                 tokenizer=tokenizer,
                 prompt=prompt,
-                max_new_tokens=50,
-                temperature=0.8,
+                max_new_tokens=75,
+                temperature=0.25,
                 top_p=0.9,
                 device=device
             )
